@@ -8,13 +8,25 @@ Functions
 
 _reduce2
 get_filters
-return_wkspace
-get_cls_field
-get_fsb
-get_gauss_cov
-_get_n222_term
-_get_general_fsb
-get_n32_cov
+
+
+Classes
+---------
+
+FSB
+    Methods
+    ---------
+    __init__
+    return_wkspace
+    filtered_sq_fields
+    get_cls_field
+    get_fsb
+    get_gauss_cov
+    _get_n222_term
+    get_n222_cov
+    _get_general_fsb
+    get_n32_cov
+    get_full_cov
 
 
 '''
