@@ -99,18 +99,6 @@ class FSB():
         rmask : array 
             a mask of the same size as map1, which will be
             applied after squaring the field
-        niter : int (default = 3)
-            the number of iteration used to compute `hp.map2alm`
-            and the `NmtField` objects
-        map1 : array
-            healpy map of size (12*nside**2)
-        filters : array
-            a binary array of shape (nbands, 3*nside)
-        mask1 : array
-            a mask of the same size as map1
-        rmask : array 
-            a mask of the same size as map1, which will be
-            applied after squaring the field
         map2 : array, optional
             healpy map of the same size as map1
         mask2 : array
@@ -118,51 +106,10 @@ class FSB():
         ells_per_bin : int (default = 10), optional
             the number of ells in each bin in the binning scheme.
             will only be used if wksp is not given.
-        cov : bool (default = False)
-            whether to compute the fully decoupled power spectrum 
-            (cov = False) or the biased power spectrum estimator 
-            / fsky to use for covariance calculations.
-        subtractmean : bool (default = True)
-            whether to subtract the mean of the filtered-squared map.
         niter : int (default = 3)
             the number of iteration used to compute `hp.map2alm`
-            and the `NmtField` objects  
-        fsbs : array
-            an array containing the FSBs in each filter.
-        cls : array 
-            an array containing the power spectrum of the
-            original map (before filtering/squaring)
-        cls_fsq : array 
-            an array containing the power spectra of the
-            filtered-squared maps. it should also contain
-            the power spectra of the maps $(\delta_{Fi} \times
-            \delta_{Fj})$, meaning the Cls of the cross-
-            filtered-squared maps as well.
-            if there are n different filters, then this
-            should be a n x n square matrix, with Cls in 
-            each entry.
-        mask : array
-            a healpy map of the mask used to compute the Cls.
-        rmask : array
-            a healpy map of the mask used to compute the FSBs
-            (the mask applied after squaring the fields).
-        ells_per_bin : int (default = 10)
-            the number of ells in each bin in the binning scheme.
-        cls : array 
-            an array containing the power spectrum of 
-            the original map (before filtering/squaring)
-        filters : array
-            a binary array of shape (nbands, 3*nside)
-        ells_per_bin : int (default = 10)
-            the number of ells in each bin in the binning scheme.
-        mask1 : array
-            a healpy map corresponding to the mask used to 
-            compute the cls.
-        mask2 : array (default = None)
-            TODO: which mask is correct in the case
-            of two different fields? is it cls of map1 or map2?
-            and in which case, is it mask1 or mask2?
-
+            and the `NmtField` objects
+  
         """
 
         self.map1 = map1
