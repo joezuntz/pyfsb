@@ -145,12 +145,12 @@ class FSB():
         self.nbands = len(self.filters)
 
         self.fsb_binned = self.get_fsb(self.w_fsb)
-        self.fsb_unbinned = self.get_fsb()
+        # self.fsb_unbinned = self.get_fsb() # only compute if need to get cov matrix
 
         field1 = nmt.NmtField(self.mask1, [self.map1], masked_on_input=False, n_iter=self.niter)
         self.cls_binned = self.get_cls_field(np.array([field1]), self.mask1, wksp=self.w_cls)
-        self.cls_unbinned = self.get_cls_field(np.array([field1]), self.mask1)
-        self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1) # not sure about generalisation to 2 masks
+        self.cls_unbinned = self.get_cls_field(np.array([field1]), self.mask1) # used in 2 different functions. maybe add statement: if none, compute it
+        # self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1) # not sure about generalisation to 2 masks # only compute if need to get cov matrix
 
         # maybe do binning here?
         self.bb = nmt.NmtBin.from_lmax_linear(3*self.nside-1, self.ells_per_bin)
@@ -349,14 +349,13 @@ class FSB():
             
         """
 
+        self.fsb_unbinned = self.get_fsb()
+        self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1)
+
         fmask_r = nmt.NmtField(self.rmask, None, spin=0)
         fmask = nmt.NmtField(self.mask2, None, spin=0)
         cw = nmt.NmtCovarianceWorkspace()
         cw.compute_coupling_coefficients(fmask, fmask_r, fmask, fmask_r)
-
-        # w_fsb = self.return_wkspace(rmask, mask2=mask, ells_per_bin=self.ells_per_bin)
-        # w_cls = self.return_wkspace(mask, ells_per_bin=self.ells_per_bin)
-        # TODO: check where to use w_cls when rmask!= mask
 
         gauss_cov = np.zeros((self.nbands+1, self.nbands+1, self.b, self.b)) 
 
@@ -508,7 +507,7 @@ class FSB():
         the binning scheme.)
         """
 
-        genfsb = self._get_general_fsb(filters1, filters2)
+        genfsb = self._get_general_fsb(filters1, filters2) / self.ells_per_bin
 
         cls = hp.anafast(self.map1) / self.fsky_cls # not sure if this should be map1 or map2
 
@@ -529,7 +528,7 @@ class FSB():
         fsb_gen[len(filters1), :len(filters1)] = binned_FSB_Ll1l2
         cl_filter[len(filters1), :len(filters1)] = deux
 
-        n32 = cl_filter*fsb_gen / ( np.array([(2*self.bb.get_effective_ells()+1)]).T * np.pi * self.fsky_cls) 
+        n32 = 4*cl_filter*fsb_gen / ( np.array([(2*self.bb.get_effective_ells()+1)]).T * self.fsky_cls) 
 
         for i in range(self.nbands): # make it symmetric
             n32[i, self.nbands] = n32[self.nbands, i].T
