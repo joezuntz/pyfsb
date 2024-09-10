@@ -1,7 +1,6 @@
 # author: Lea Harscouet lea.harscouet@physics.ox.ac.uk
-# license: ?
 
-'''Pymaster extension template
+'''Pymaster extension for Filtered Square Bispectra (FSB)
 
 Functions
 ---------
@@ -85,7 +84,7 @@ def get_filters(nbands, nside):
 
 class FSB():
 
-    def __init__(self, map1, mask1, filters, rmask=None, map2=None, mask2=None, w_fsb=None, ells_per_bin=10, niter=3):
+    def __init__(self, map1, mask1, filters, rmask=None, ells_per_bin=10, niter=3):
 
         """
         Arguments
@@ -99,10 +98,6 @@ class FSB():
         rmask : array 
             a mask of the same size as map1, which will be
             applied after squaring the field
-        map2 : array, optional
-            healpy map of the same size as map1
-        mask2 : array
-            a mask of the same size as map2
         ells_per_bin : int (default = 10), optional
             the number of ells in each bin in the binning scheme.
             will only be used if wksp is not given.
@@ -116,8 +111,6 @@ class FSB():
         self.mask1 = mask1
         self.filters = filters
         self.rmask = rmask
-        self.map2 = map2
-        self.mask2 = mask2
         self.ells_per_bin = ells_per_bin
         self.niter = niter
 
@@ -128,34 +121,29 @@ class FSB():
             self.mask1 = np.ones(self.npix) 
         if self.rmask is None:
             self.rmask = self.mask1
-        if self.map2 is None:
-            self.map2 = self.map1
-        if self.mask2 is None:
-            self.mask2 = self.mask1
-
         
-        self.w_fsb = w_fsb 
-        if self.w_fsb is None: # better if not an argument actually
-            self.w_fsb = self.return_wkspace(self.rmask, self.mask2, self.ells_per_bin)
+        self.w_fsb = self.return_wkspace(self.rmask, self.mask1, self.ells_per_bin)
         self.w_cls = self.return_wkspace(self.mask1, self.mask1, self.ells_per_bin)
 
-        self.fsky_fsb = np.mean(self.rmask*self.mask2)
-        self.fsky_cls = np.mean(self.mask1*self.mask2)
+        self.fsky_fsb = np.mean(self.rmask*self.mask1)
+        self.fsky_cls = np.mean(self.mask1*self.mask1)
 
         self.nbands = len(self.filters)
 
         self.fsb_binned = self.get_fsb(self.w_fsb)
-        # self.fsb_unbinned = self.get_fsb() # only compute if need to get cov matrix
 
-        field1 = nmt.NmtField(self.mask1, [self.map1], masked_on_input=False, n_iter=self.niter)
-        self.cls_binned = self.get_cls_field(np.array([field1]), self.mask1, wksp=self.w_cls)
-        self.cls_unbinned = self.get_cls_field(np.array([field1]), self.mask1) # used in 2 different functions. maybe add statement: if none, compute it
-        # self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1) # not sure about generalisation to 2 masks # only compute if need to get cov matrix
-
-        # maybe do binning here?
+        self.field1 = nmt.NmtField(self.mask1, [self.map1], masked_on_input=False, n_iter=self.niter)
+        self.cls_binned = self.get_cls_field(np.array([self.field1]), self.mask1, wksp=self.w_cls)
+        
+        # binning
         self.bb = nmt.NmtBin.from_lmax_linear(3*self.nside-1, self.ells_per_bin)
         self.b = len(self.bb.get_effective_ells())
-        self.bins = get_filters(self.b, self.nside) # corresponding filters for the bins (for generalized fsb)
+        self.bins = get_filters(self.b, self.nside) # filters corresponding to bins (for generalized fsb)
+
+        # for None statement
+        self.gauss_cov = None
+        self.cls_unbinned = None
+
 
 
 
@@ -184,18 +172,16 @@ class FSB():
         fmask1 = nmt.NmtField(mask1, None, spin=0)
         fmask2 = nmt.NmtField(mask2, None, spin=0)
 
-        if lpb==1: # not sure still relevant?
-            ells = np.arange(3*self.nside)
-            b = nmt.NmtBin(bpws=ells, ells=ells, weights=np.ones(len(ells)))
-        else:
-            b = nmt.NmtBin.from_lmax_linear(3*self.nside-1, lpb)
+        b = nmt.NmtBin.from_lmax_linear(3*self.nside-1, lpb)
+
         w12 = nmt.NmtWorkspace()
-        w12.compute_coupling_matrix(fmask1, fmask2, b) # what about remask though?
+        w12.compute_coupling_matrix(fmask1, fmask2, b)
 
         return w12 
 
 
-    def filtered_sq_fields(self): # generalize for generalized FSB
+
+    def filtered_sq_fields(self):
 
         """
         Creates NmtField objects for each filtered-squared map.
@@ -210,12 +196,10 @@ class FSB():
         mask1_bin = self.mask1>0   
         map1 = self.map1*mask1_bin       
 
-        alm1 = hp.map2alm(map1, iter=self.niter) # , lmax=3*self.nside-1
+        alm1 = hp.map2alm(map1, iter=self.niter)
         
         mp_filt_sq = np.array([hp.alm2map(hp.almxfl(alm1, fl), self.nside, lmax=3*self.nside-1)**2 for fl in self.filters])   
         
-        mp_filt_sq = np.array([(m-np.mean(m[mask1_bin==1]))*mask1_bin for m in mp_filt_sq]) # -mean, remasking (binary)
-
         f1sq = [nmt.NmtField(self.rmask, [m], masked_on_input=False, n_iter=self.niter) for m in mp_filt_sq] 
         
         return np.array(f1sq)
@@ -270,7 +254,7 @@ class FSB():
 
         if field1.shape[0]>1: # several fields as input
 
-            if wksp is None: # auto power spectra, unbinned
+            if wksp is None: # cross power spectra, unbinned
 
                 claa = np.zeros((len(field1), len(field2), 3*self.nside)) # ?
 
@@ -279,25 +263,24 @@ class FSB():
                         for m in range(n, len(field2)): # TODO: if field2!=field1, should not start from n?
                             cross = nmt.compute_coupled_cell(field1[n], field2[m])[0] / fsky
                             claa[n, m] = cross; claa[m, n] = cross
-                else:
+                else: 
                     for n in range(len(field1)):
                         for m in range(len(field2)): # if field2!=field1, should not start from n?
                             claa[n, m] = nmt.compute_coupled_cell(field1[n], field2[m])[0] / fsky
                     if len(field2)==1:
                         claa = claa[:, 0, :] # get rid of extra layer
                                     
-            else: # cross power spectra, binned
+            else: # auto power spectra, binned
                 claa = np.array([wksp.decouple_cell(nmt.compute_coupled_cell(fi, fi))[0] for fi in field1])
 
             return claa
         
         else: # one field as input, inside a np.array
-            # need to unpack that additional layer.... but what about field2?
 
-            if wksp is None: 
+            if wksp is None: # auto power spectra, unbinned
                 clbb = nmt.compute_coupled_cell(field1[0], field2[0])[0] / fsky
 
-            else:
+            else: # auto power spectra, binned
                 clbb = wksp.decouple_cell(nmt.compute_coupled_cell(field1[0], field2[0]))[0]
 
             return clbb
@@ -327,9 +310,9 @@ class FSB():
         """
         
         self.f1s = self.filtered_sq_fields()
-        f2 = nmt.NmtField(self.mask2, [self.map2], n_iter=self.niter)
+        f2 = nmt.NmtField(self.mask1, [self.map1], n_iter=self.niter)
 
-        fsb = self.get_cls_field(self.f1s, self.rmask, field2=np.array([f2]), mask2=self.mask2, wksp=wksp) #, cov=self.cov
+        fsb = self.get_cls_field(self.f1s, self.rmask, field2=np.array([f2]), mask2=self.mask1, wksp=wksp) 
         
         return fsb
     
@@ -349,45 +332,49 @@ class FSB():
             
         """
 
-        self.fsb_unbinned = self.get_fsb()
-        self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1)
+        if self.gauss_cov is None:
 
-        fmask_r = nmt.NmtField(self.rmask, None, spin=0)
-        fmask = nmt.NmtField(self.mask2, None, spin=0)
-        cw = nmt.NmtCovarianceWorkspace()
-        cw.compute_coupling_coefficients(fmask, fmask_r, fmask, fmask_r)
+            self.fsb_unbinned = self.get_fsb()
+            self.cls_fsq_unbinned = self.get_cls_field(self.f1s, self.mask1)
+            if self.cls_unbinned is None:
+                self.cls_unbinned = self.get_cls_field(np.array([self.field1]), self.mask1)
 
-        gauss_cov = np.zeros((self.nbands+1, self.nbands+1, self.b, self.b)) 
 
-        fsbs_cls = np.zeros((self.nbands+1, self.fsb_unbinned.shape[1]))
-        fsbs_cls[:self.nbands] = self.fsb_unbinned
-        fsbs_cls[-1] = self.cls_unbinned # cls
+            fmask_r = nmt.NmtField(self.rmask, None, spin=0)
+            fmask = nmt.NmtField(self.mask1, None, spin=0)
+            cw = nmt.NmtCovarianceWorkspace()
+            cw.compute_coupling_coefficients(fmask, fmask_r, fmask, fmask_r)
 
-        # FSB-FSB
+            gauss_cov = np.zeros((self.nbands+1, self.nbands+1, self.b, self.b)) 
 
-        for n in range(len(fsbs_cls)):
-            for m in range(n, len(fsbs_cls)):
+            fsbs_cls = np.zeros((self.nbands+1, self.fsb_unbinned.shape[1]))
+            fsbs_cls[:self.nbands] = self.fsb_unbinned
+            fsbs_cls[-1] = self.cls_unbinned # last col is for cls
 
-                clad = fsbs_cls[n]
-                clbc = fsbs_cls[m]
-                clbd = fsbs_cls[-1] # cls
-                
-                if m==self.nbands:
-                    clac = clad 
-                    clbc = clbd
-                else:
-                    clac = self.cls_fsq_unbinned[n, m] # cls_fsq[n, m]
 
-                if n==self.nbands:
-                    clac = fsbs_cls[-1] # cls 
-                    clad = fsbs_cls[-1] # cls
-                    clbc = fsbs_cls[-1] # cls
+            for n in range(len(fsbs_cls)):
+                for m in range(n, len(fsbs_cls)):
+
+                    clad = fsbs_cls[n]
+                    clbc = fsbs_cls[m]
+                    clbd = fsbs_cls[-1] # cls
                     
-                covij_fsb = nmt.gaussian_covariance(cw, 0, 0, 0, 0, [clac], [clad], [clbc], [clbd], self.w_fsb)
-                gauss_cov[n, m] = covij_fsb
-                gauss_cov[m, n] = covij_fsb
-        
-        self.gauss_cov = gauss_cov
+                    if m==self.nbands: # when computing FSB-Cl cov
+                        clac = clad 
+                        clbc = clbd
+                    else: # when computing FSB-FSB cov
+                        clac = self.cls_fsq_unbinned[n, m] 
+
+                    if n==self.nbands: # when computing Cl-Cl cov
+                        clac = fsbs_cls[-1] # cls 
+                        clad = fsbs_cls[-1] # cls
+                        clbc = fsbs_cls[-1] # cls
+                        
+                    covij_fsb = nmt.gaussian_covariance(cw, 0, 0, 0, 0, [clac], [clad], [clbc], [clbd], self.w_fsb)
+                    gauss_cov[n, m] = covij_fsb
+                    gauss_cov[m, n] = covij_fsb
+            
+            self.gauss_cov = gauss_cov
 
         return self.gauss_cov
 
@@ -417,7 +404,7 @@ class FSB():
         lmax = len(cls_f)-1 
         beam = np.ones_like(cls_f)
         ls = np.arange(lmax+1)
-        bin = nmt.NmtBin.from_lmax_linear(lmax, 1) # could use general binning instead
+        bin = nmt.NmtBin.from_lmax_linear(lmax, 1)
 
         w = nmt.nmtlib.comp_coupling_matrix(0, 0, lmax, lmax, 0, 0, 0, 0, beam, beam, cls_f, bin.bin, 0, -1, -1, -1)
         sum_l1 = nmt.nmtlib.get_mcm(w, (lmax+1)**2).reshape([lmax+1, lmax+1])
@@ -439,6 +426,9 @@ class FSB():
         array of dimensions (nbands+1, nbands+1, nbins).
         """
 
+        if self.cls_unbinned is None:
+            self.cls_unbinned = self.get_cls_field(np.array([self.field1]), self.mask1)
+
         n222 = np.zeros((len(self.filters)+1, len(self.filters)+1, self.b, self.b))
 
         for nb in range(self.nbands):
@@ -450,7 +440,7 @@ class FSB():
         return n222/self.fsky_cls
 
 
-    def _get_general_fsb(self, filters1, filters2):
+    def _get_general_fsb(self, filters1, filters2): # maybe use fsq_fields
 
         """
         Computes the generalized FSB for 
@@ -473,17 +463,16 @@ class FSB():
         maps_F = np.array([hp.alm2map(hp.almxfl(alms, fl), self.nside) for fl in filters1])
         maps_B = np.array([hp.alm2map(hp.almxfl(alms, bl), self.nside) for bl in filters2])
 
-        self.cls_FBxOG = np.zeros((len(filters1), len(filters2), len(filters1[0])))
+        self.cls_mFBxm = np.zeros((len(filters1), len(filters2), len(filters1[0])))
 
         for f in range(len(filters1)):
             print(f)
             for b in range(len(filters2)):
                 print('\t', b)
                 map_FB = maps_F[f]*maps_B[b]
-                map_FB = (map_FB-np.mean(map_FB[self.rmask==1]))*self.rmask # - mean and remasking (only works for rmask binary)
-                self.cls_FBxOG[f, b] = hp.anafast(map_FB, self.map2) / self.fsky_fsb
+                self.cls_mFBxm[f, b] = hp.anafast(map_FB, self.map1) / self.fsky_fsb
 
-        return self.cls_FBxOG
+        return self.cls_mFBxm
 
 
     def get_n32_cov(self, filters1, filters2):
@@ -507,12 +496,12 @@ class FSB():
         the binning scheme.)
         """
 
-        genfsb = self._get_general_fsb(filters1, filters2) / self.ells_per_bin
+        genfsb = self._get_general_fsb(filters1, filters2) / self.ells_per_bin # must divide by normalisation factor
 
-        cls = hp.anafast(self.map1) / self.fsky_cls # not sure if this should be map1 or map2
+        cls = hp.anafast(self.map1) / self.fsky_cls
 
         # bin general fsb
-        binned_FSB_Ll1l2 = np.zeros((len(filters1), len(filters2), self.b)) # i think not nbands, nbins, nbins necessarily (depends on len of filters2)
+        binned_FSB_Ll1l2 = np.zeros((len(filters1), len(filters2), self.b)) 
         for n in range(len(filters1)):
             for b in range(len(filters2)):
                 binned_FSB_Ll1l2[n, b] = self.bb.bin_cell(genfsb[n, b])
@@ -548,6 +537,8 @@ class FSB():
         or if insquares set to True, an array of dimensions 
         ((nbands+1), (nbands+1), nbins, nbins).
         """
+        if self.gauss_cov is None:
+            self.gauss_cov = self.get_gauss_cov()
         self.full_cov_large = self.gauss_cov + self.get_n222_cov() + self.get_n32_cov(self.filters, self.bins)
         self.full_cov = _reduce2(self.full_cov_large)
         
