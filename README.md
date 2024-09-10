@@ -1,6 +1,6 @@
 # `pyfsb`: a `pymaster` Extension for Filtered Squared Bispectra
 
-PyFSB is a Python module to compute Filtered-Squared Bispectra (FSBs) from the existing pseudo-Cl framework implemented in [NaMaster](https://github.com/LSSTDESC/NaMaster.git) by (Alonso et al. 2019)[https://arxiv.org/abs/1809.09603].
+PyFSB is a Python module to compute Filtered-Squared Bispectra (FSBs) from the existing pseudo-Cl framework implemented in [NaMaster](https://github.com/LSSTDESC/NaMaster.git) ([Alonso et al. 2019](https://arxiv.org/abs/1809.09603)).
 
 
 ### Installation
