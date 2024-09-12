@@ -17,7 +17,7 @@ You can familiarize yourself with the code by checking out the `howtouse` jupyte
 
 ### Licensing
 
-This code open source and freely available under terms consistent with BSD 3-Clause licensing.
+This code open source and freely available under terms consistent with GPLv3 licensing.
 
 If you use PyFSB for any scientific publication, we ask you to cite this github repository and the companion paper https://arxiv.org/inpreparation. 
 

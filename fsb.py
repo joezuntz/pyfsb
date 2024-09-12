@@ -50,8 +50,8 @@ def _reduce2(bigm):
     An array of shape (k, ...)
 
     """
-    minus1 = np.hstack(tuple(l for l in bigm)); print(minus1.shape)
-    minus2 = np.hstack(tuple(l for l in minus1)); print(minus2.shape)
+    minus1 = np.hstack(tuple(l for l in bigm)); # print(minus1.shape)
+    minus2 = np.hstack(tuple(l for l in minus1)); # print(minus2.shape)
     return minus2
 
 def get_filters(nbands, nside):
@@ -117,6 +117,11 @@ class FSB():
         self.npix = len(self.map1) 
         self.nside = hp.npix2nside(self.npix)
 
+        # binning
+        self.bb = nmt.NmtBin.from_lmax_linear(3*self.nside-1, self.ells_per_bin)
+        self.b = len(self.bb.get_effective_ells())
+        self.bins = get_filters(self.b, self.nside) # filters corresponding to bins (for generalized fsb)
+
         if self.mask1 is None:
             self.mask1 = np.ones(self.npix) 
         if self.rmask is None:
@@ -130,17 +135,12 @@ class FSB():
 
         self.nbands = len(self.filters)
 
-        self.fsb_binned = self.get_fsb(self.w_fsb)
+        self.fsb_binned = self.get_fsb(wksp=self.w_fsb)
 
         self.field1 = nmt.NmtField(self.mask1, [self.map1], masked_on_input=False, n_iter=self.niter)
         self.cls_binned = self.get_cls_field(np.array([self.field1]), self.mask1, wksp=self.w_cls)
         
-        # binning
-        self.bb = nmt.NmtBin.from_lmax_linear(3*self.nside-1, self.ells_per_bin)
-        self.b = len(self.bb.get_effective_ells())
-        self.bins = get_filters(self.b, self.nside) # filters corresponding to bins (for generalized fsb)
-
-        # for None statement
+        # for None statements
         self.gauss_cov = None
         self.cls_unbinned = None
 
@@ -252,6 +252,8 @@ class FSB():
 
         fsky = np.mean(mask1*mask2)
 
+        # fsb = self.get_cls_field(self.f1s, self.rmask, field2=np.array([f2]), mask2=self.mask1, wksp=wksp) 
+
         if field1.shape[0]>1: # several fields as input
 
             if wksp is None: # cross power spectra, unbinned
@@ -263,15 +265,25 @@ class FSB():
                         for m in range(n, len(field2)): # TODO: if field2!=field1, should not start from n?
                             cross = nmt.compute_coupled_cell(field1[n], field2[m])[0] / fsky
                             claa[n, m] = cross; claa[m, n] = cross
-                else: 
+                else:
                     for n in range(len(field1)):
                         for m in range(len(field2)): # if field2!=field1, should not start from n?
                             claa[n, m] = nmt.compute_coupled_cell(field1[n], field2[m])[0] / fsky
                     if len(field2)==1:
                         claa = claa[:, 0, :] # get rid of extra layer
                                     
-            else: # auto power spectra, binned
-                claa = np.array([wksp.decouple_cell(nmt.compute_coupled_cell(fi, fi))[0] for fi in field1])
+            else: 
+
+                if same is True: # auto power spectra, binned
+                    claa = np.array([wksp.decouple_cell(nmt.compute_coupled_cell(fi, fi))[0] for fi in field1])
+
+                else: # cross power spectra, binned
+                    claa = np.zeros((len(field1), len(field2), self.b)) # instead of self.b 
+                    for n in range(len(field1)):
+                        for m in range(len(field2)): # if field2!=field1, should not start from n?
+                            claa[n, m] = wksp.decouple_cell(nmt.compute_coupled_cell(field1[n], field2[m]))[0]
+                    if len(field2)==1:
+                        claa = claa[:, 0, :] # get rid of extra layer
 
             return claa
         
@@ -318,7 +330,7 @@ class FSB():
     
 
 
-    def get_gauss_cov(self):
+    def get_gauss_cov(self, insquares=True):
 
         """
         Computes the gaussian-limit approximation
@@ -359,13 +371,13 @@ class FSB():
                     clbc = fsbs_cls[m]
                     clbd = fsbs_cls[-1] # cls
                     
-                    if m==self.nbands: # when computing FSB-Cl cov
+                    if m==self.nbands: # when computing cross FSB-Cl cov
                         clac = clad 
                         clbc = clbd
-                    else: # when computing FSB-FSB cov
+                    else: # when computing cross FSB-FSB cov
                         clac = self.cls_fsq_unbinned[n, m] 
 
-                    if n==self.nbands: # when computing Cl-Cl cov
+                    if n==self.nbands: # when computing auto Cl cov
                         clac = fsbs_cls[-1] # cls 
                         clad = fsbs_cls[-1] # cls
                         clbc = fsbs_cls[-1] # cls
@@ -376,7 +388,10 @@ class FSB():
             
             self.gauss_cov = gauss_cov
 
-        return self.gauss_cov
+        if insquares==False:
+            return _reduce2(self.gauss_cov)
+        else:
+            return self.gauss_cov
 
 
 
@@ -466,9 +481,9 @@ class FSB():
         self.cls_mFBxm = np.zeros((len(filters1), len(filters2), len(filters1[0])))
 
         for f in range(len(filters1)):
-            print(f)
+            # print(f)
             for b in range(len(filters2)):
-                print('\t', b)
+                # print('\t', b)
                 map_FB = maps_F[f]*maps_B[b]
                 self.cls_mFBxm[f, b] = hp.anafast(map_FB, self.map1) / self.fsky_fsb
 
