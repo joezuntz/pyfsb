@@ -269,8 +269,8 @@ class FSB():
                     for n in range(len(field1)):
                         for m in range(len(field2)): # if field2!=field1, should not start from n?
                             claa[n, m] = nmt.compute_coupled_cell(field1[n], field2[m])[0] / fsky
-                    if len(field2)==1:
-                        claa = claa[:, 0, :] # get rid of extra layer
+                    # if len(field2)==1:
+                    #     claa = claa[:, 0, :] # get rid of extra layer
                                     
             else: 
 
@@ -282,10 +282,10 @@ class FSB():
                     for n in range(len(field1)):
                         for m in range(len(field2)): # if field2!=field1, should not start from n?
                             claa[n, m] = wksp.decouple_cell(nmt.compute_coupled_cell(field1[n], field2[m]))[0]
-                    if len(field2)==1:
-                        claa = claa[:, 0, :] # get rid of extra layer
+                    # if len(field2)==1:
+                    #     claa = claa[:, 0, :] # get rid of extra layer
 
-            return claa
+            return claa.squeezed()
         
         else: # one field as input, inside a np.array
 
@@ -539,7 +539,7 @@ class FSB():
 
         return n32
     
-    def get_full_cov(self, insquares=False):
+    def get_full_cov(self, insquares=True, n32=True):
 
         """
         Adds the mask-corrected, binned gaussian-
@@ -554,15 +554,17 @@ class FSB():
         """
         if self.gauss_cov is None:
             self.gauss_cov = self.get_gauss_cov()
-        self.full_cov_large = self.gauss_cov + self.get_n222_cov() + self.get_n32_cov(self.filters, self.bins)
-        self.full_cov = _reduce2(self.full_cov_large)
+
+        if n32 is True:
+            self.full_cov_large = self.gauss_cov + self.get_n222_cov() + self.get_n32_cov(self.filters, self.bins)
+        else: # bypass n32 altogether is not needed
+            self.full_cov_large = self.gauss_cov + self.get_n222_cov()
         
         if insquares is True:
             return self.full_cov_large
         else:
-            return self.full_cov
+            return _reduce2(self.full_cov_large)
     
-
 
 
 

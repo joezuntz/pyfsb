@@ -510,7 +510,7 @@ class FSB():
             cla2b1 = self.cls_12_unbinned
             cla2b2 = self.cls_22_unbinned
 
-            if self.nbands==1:
+            if self.nbands==1: # maybe just use .squeeze() ?
                 cla1b1 = self.fsb_unbinned_pure
                 cla1b2 = self.fsb_unbinned
             else:
@@ -524,10 +524,10 @@ class FSB():
             for m in range(n, self.nbands):
 
                 # this is for the fsb-fsb covariance
-
                 if self.nbands==1:
                     cla1b1 = self.cls_1sq1sq_unbinned
-                    cla1b2 = self.fsb_unbinned
+                    # cla1b2 = self.fsb_unbinned # FIXME: previously
+                    cla2b1 = self.fsb_unbinned
                 else:
                     cla1b1 = self.cls_1sq1sq_unbinned[n,m]
                     cla2b1 = self.fsb_unbinned[m]
