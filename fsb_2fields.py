@@ -737,7 +737,9 @@ class FSB():
         ls = np.arange(lmax+1)
         bin = nmt.NmtBin.from_lmax_linear(lmax, 1)
 
-        w = nmt.nmtlib.comp_coupling_matrix(0, 0, lmax, lmax, 0, 0, 0, 0, beam, beam, cls_11_f, bin.bin, 0, -1, -1, -1)
+        w = nmt.nmtlib.comp_coupling_matrix(0, 0, lmax, lmax, 0, 0, 0, 0, 0,
+                                            0.0, beam, beam, cls_11_f,
+                                            bin.bin, 0, -1, -1, -1)
         sum_l1 = nmt.nmtlib.get_mcm(w, (lmax+1)**2).reshape([lmax+1, lmax+1])
         sum_l1 /= (2*ls+1)[None, :]
         cov = sum_l1 * 4 * np.outer(cls_12_f, cls_12_f)

@@ -712,7 +712,9 @@ class FSB():
         cls_out1_f = cl_out_one*filter
         cls_out2_f = cl_out_two*filter
 
-        w = nmt.nmtlib.comp_coupling_matrix(0, 0, self.lmax, self.lmax, 0, 0, 0, 0, self._beam, self._beam, cls_in_f, self._bin_n222.bin, 0, -1, -1, -1)
+        w = nmt.nmtlib.comp_coupling_matrix(0, 0, self.lmax, self.lmax, 0, 0, 0, 0, 0,
+                                            0.0, self._beam, self._beam, cls_in_f,
+                                            self._bin_n222.bin, 0, -1, -1, -1)
         sum_l1 = nmt.nmtlib.get_mcm(w, (self.lmax+1)**2).reshape([self.lmax+1, self.lmax+1])
         sum_l1 /= (2*self._ls+1)[None, :]
         cov = sum_l1 * 4 * np.outer(cls_out1_f, cls_out2_f)
